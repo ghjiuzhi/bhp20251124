@@ -1,0 +1,31 @@
+# compile verilog/system verilog design source files
+verilog xil_defaultlib  \
+"../../../../bhp.srcs/sources_1/imports/KOM_Bar_MM_fullpipe1/KOM_Bar_MM.v" \
+"../../../../bhp.srcs/sources_1/imports/KOM_Bar_MM_fullpipe1/Shifer_adder.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/bhp_256.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/bhp_256_top.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/bhp_adder.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/bhp_field_add_sub_gfp.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/bhp_with_lossy.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/cast_lossy.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/cast_lossy_core.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/coordinate_transformation.v" \
+"../../../../bhp.srcs/sources_1/imports/KOM_Bar_MM_fullpipe1/edward_NM_M.v" \
+"../../../../bhp.srcs/sources_1/imports/KOM_Bar_MM_fullpipe1/edward_NM_Mba.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/edwards_add.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/edwards_add_core.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/field_inv_gfp.v" \
+"../../../../bhp.srcs/sources_1/imports/KOM_Bar_MM_fullpipe1/karasuba_mul.v" \
+"../../../../bhp.srcs/sources_1/imports/KOM_Bar_MM_fullpipe1/kom_pe.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/montgomery_add.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/montgomery_add_core.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/montgomery_add_lookup.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/subtractor.v" \
+"../../../../bhp.srcs/sources_1/imports/sources_1/sync_fifo_ptr.v" \
+"../../../../bhp.srcs/sim_1/imports/sim_1/bhp_with_lossy_tb.v" \
+
+# compile glbl module
+verilog xil_defaultlib "glbl.v"
+
+# Do not sort compile order
+nosort
