@@ -292,6 +292,7 @@ module bhp_with_lossy_tb;
             // NOTE: o_core_chunk comes from bit3. 
             // If bit3[1:0] selects the point (0=x1, 1=x2...), we use that.
             look_idx = (o_core_id - 1) * 4 + o_core_chunk[1:0]; 
+			//look_idx = (o_core_id - 1) * 4 + o_core_chunk[2:1];
             
             if (look_idx >= 0 && look_idx < DEPTH) begin
                 i_core_base_x   <= xmem[look_idx];
@@ -786,6 +787,8 @@ end
             $display("[%0t] [WARNING] i_vld assertion FAILED! o_rdy is LOW.", $time);
         end
     end
+	
+	/*
     // --- [DEBUG 3] 超时强制停止 ---
     initial begin
         // 设置一个足够长的时间（根据仿真需要调整，例如 500us）
@@ -799,7 +802,7 @@ end
         $finish;
     end    
     
-    
+*/    
 always @(posedge clk) begin
     if (i_lvs_rdy && o_lvs_vld) begin
       // %064h锛氬浐瀹氬搴? 64 涓崄鍏繘鍒跺瓧绗︼紝鍓嶅 0 琛ラ綈锛孧SB 鍦ㄥ乏
