@@ -52,41 +52,18 @@ module bhp_256#(
     input  wire [256 - 1 : 0]   top_inv_rslt_o       ,
     input  wire                 top_inv_rslt_valid_o ,
 
-/*
     input  wire [32-1:0]        i_id,
     input  wire                 i_loop_point,
     input  wire [256 - 1 : 0]   i_x1        ,
     input  wire [256 - 1 : 0]   i_y1        ,
-    input  wire [256 - 1 : 0]   i_x2        ,
-    input  wire [256 - 1 : 0]   i_y2        ,
-    input  wire [256 - 1 : 0]   i_x3        ,
-    input  wire [256 - 1 : 0]   i_y3        ,
-    input  wire [256 - 1 : 0]   i_x4        ,
-    input  wire [256 - 1 : 0]   i_y4        ,
-*/
-    // --- [MODIFIED START] Interface Update ---
-    // Replaced old inputs (i_id, i_x1...i_y4) with:
-    
-    // 1. Request Interface (Output)
-    // Tells external logic which ID and Chunk Choice is needed
-    output wire [32-1:0]        o_id,           // Requesting ID (corresponds to MG_j)
-    output wire [2:0]           o_chunk_val,    // Requesting Choice (from bit3)
-    output wire                 o_req_vld,      // Request Valid
-
-    // 2. Data Return Interface (Input)
-    // External logic returns the single lookup result
-    input  wire [256 - 1 : 0]   i_base_x,       // The specific X coord needed
-    input  wire [256 - 1 : 0]   i_base_y,       // The specific Y coord needed
-    input  wire                 i_base_vld,     // Data Valid (Replaces i_loop_point)
-
-    // 3. Special Broadcast Interface
-    // Notifies external logic of Start Point changes
-    output wire                 o_change_start,
-    output wire [256 - 1 : 0]   o_x1_start,
-    output wire [256 - 1 : 0]   o_y1_start,
-    // --- [MODIFIED END] ---
-    
+    // input  wire [256 - 1 : 0]   i_x2        ,
+    // input  wire [256 - 1 : 0]   i_y2        ,
+    // input  wire [256 - 1 : 0]   i_x3        ,
+    // input  wire [256 - 1 : 0]   i_y3        ,
+    // input  wire [256 - 1 : 0]   i_x4        ,
+    // input  wire [256 - 1 : 0]   i_y4        ,
     output wire o_need,
+    output wire [9:0] pd_addr,
 
     output wire mal_result_valid
 
@@ -272,6 +249,12 @@ reg  mal_v_w_p; // mal_v waiting for pause
 reg r_ed_pm_param_tvalid_p;
 
 wire i_ma_v;
+
+wire [1:0] pd_times;
+wire [7:0] pd_point;
+
+
+
 
 // input reg
     always @(posedge clk or negedge rstn) begin
@@ -683,26 +666,6 @@ always @(posedge clk or negedge rstn) begin
 end
 assign mal_pv = mal_v_w_p && (~pause);
 
-
-
-// --- [MODIFIED START] Output Logic Assignments ---
-
-    // Map internal counters/state to output request signals
-    // r_mal_MG_j is the internal counter for the current chunk index
-    assign o_id        = {22'd0, r_mal_MG_j}; 
-    assign o_chunk_val = r_mal_bit3;
-    // Valid when internal logic generates a new bit3 request
-    assign o_req_vld   = r_mal_bit3_valid;
-
-    // Special broadcast signals triggering on state change
-    assign o_change_start = (cur_state == ST_CIRCUIT_GET_START);
-    assign o_x1_start     = r_START_POINT_X;
-    assign o_y1_start     = r_START_POINT_Y;
-
-    // --- [MODIFIED END] ---
-
-
-
     montgomery_add_lookup #(
         .P_MOD(P_MOD)
     ) u_montgomery_add_lookup (
@@ -741,40 +704,23 @@ assign mal_pv = mal_v_w_p && (~pause);
         .top_inv_rslt_o               (t1_inv_rslt_o       ),
         .top_inv_rslt_valid_o         (t1_inv_rslt_valid_o ),
 
- //       .i_id          (i_id        ),
- // 1. Trick ID Check:
-        // The module expects (i_id == MG_j - 1).
-        // We calculate (r_mal_MG_j - 1) and feed it in, forcing the check to PASS.
-        .i_id          ( {22'd0, r_mal_MG_j - 10'd1} ),
-//        .i_loop_point  (i_loop_point),
-// 2. Control Validity:
-        // Since ID check is forced true, data acceptance is controlled solely by this signal.
-        .i_loop_point  ( i_base_vld ),
-/*        .i_x1          (i_x1        ),
+//         .i_id          (i_id        ),
+        .i_loop_point  (i_loop_point),
+        .i_x1          (i_x1        ),
         .i_y1          (i_y1        ),
-        .i_x2          (i_x2        ),
-        .i_y2          (i_y2        ),
-        .i_x3          (i_x3        ),
-        .i_y3          (i_y3        ),
-        .i_x4          (i_x4        ),
-        .i_y4          (i_y4        ),
-*/
-// 3. Bypass MUX Selection:
-        // Connect the SINGLE external base point to ALL input channels.
-        // No matter what 'bit3' selects (1, 2, 3, or 4), it reads the correct i_base_x.
-        .i_x1          ( i_base_x ), 
-        .i_y1          ( i_base_y ),
-        .i_x2          ( i_base_x ), 
-        .i_y2          ( i_base_y ),
-        .i_x3          ( i_base_x ), 
-        .i_y3          ( i_base_y ),
-        .i_x4          ( i_base_x ), 
-        .i_y4          ( i_base_y ),
-        .o_need        (o_need      )
+//         .i_x2          (i_x2        ),
+//         .i_y2          (i_y2        ),
+//         .i_x3          (i_x3        ),
+//         .i_y3          (i_y3        ),
+//         .i_x4          (i_x4        ),
+//         .i_y4          (i_y4        ),
+        .o_need        (o_need      ),
+        .pd_times      (pd_times    ),
+        .pd_point      (pd_point    )
 
 
     );
-
+assign pd_addr = {pd_point,pd_times};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // coordinate_transformation

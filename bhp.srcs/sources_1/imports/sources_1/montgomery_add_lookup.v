@@ -42,23 +42,19 @@ module montgomery_add_lookup#(
     input  wire [256 - 1 : 0]   top_inv_rslt_o       ,
     input  wire                 top_inv_rslt_valid_o ,
 
-    input  wire [32-1:0]i_id,
+    //input  wire [32-1:0]i_id,
     input  wire                 i_loop_point,
     input  wire [256 - 1 : 0]   i_x1        ,
     input  wire [256 - 1 : 0]   i_y1        ,
-    input  wire [256 - 1 : 0]   i_x2        ,
-    input  wire [256 - 1 : 0]   i_y2        ,
-    input  wire [256 - 1 : 0]   i_x3        ,
-    input  wire [256 - 1 : 0]   i_y3        ,
-    input  wire [256 - 1 : 0]   i_x4        ,
-    input  wire [256 - 1 : 0]   i_y4        ,
-    output wire o_need
-
-
-
-
-
-
+//     input  wire [256 - 1 : 0]   i_x2        ,
+//     input  wire [256 - 1 : 0]   i_y2        ,
+//     input  wire [256 - 1 : 0]   i_x3        ,
+//     input  wire [256 - 1 : 0]   i_y3        ,
+//     input  wire [256 - 1 : 0]   i_x4        ,
+//     input  wire [256 - 1 : 0]   i_y4        ,
+    output wire       o_need   ,
+    output wire [1:0] pd_times,
+    output wire [7:0] pd_point
     );
 
 reg                 valid_0;
@@ -165,8 +161,9 @@ wire [256 - 1 : 0]   t1_inv_rslt_o        ,t2_inv_rslt_o        ,t3_inv_rslt_o  
 wire                 t1_inv_rslt_valid_o  ,t2_inv_rslt_valid_o  ,t3_inv_rslt_valid_o  ;
 
 
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ç¼“å­˜è¾“å…¥æ•°æ®
+// »º´æÊäÈëÊı¾İ
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
@@ -219,6 +216,42 @@ wire                 t1_inv_rslt_valid_o  ,t2_inv_rslt_valid_o  ,t3_inv_rslt_val
     assign     w_bit1     = reg_bit3[1];
     assign     w_bit2     = reg_bit3[0];
     assign     w_bit0and1 = reg_bit3[2] & reg_bit3[1];
+
+
+
+
+assign pd_times = {w_bit1,w_bit0};
+assign pd_point = pre_data_G_i_j - 1;
+// if     ((w_bit1 == 0) && (w_bit0 == 0)) montgomery_x <= pre_data_G_X1_x; // x_bases0;
+// else if((w_bit1 == 0) && (w_bit0 == 1)) montgomery_x <= pre_data_G_X2_x; // x_bases1;
+// else if((w_bit1 == 1) && (w_bit0 == 0)) montgomery_x <= pre_data_G_X3_x; // x_bases2;
+// else if((w_bit1 == 1) && (w_bit0 == 1)) montgomery_x <= pre_data_G_X4_x; // x_bases3;
+//
+//     always @(posedge clk or negedge rstn) begin
+//         if(~rstn) begin
+//             r_pd_times_v    <= 0;
+//         end else if(bit3_valid && ready)begin
+//             r_pd_times_v    <= 1;
+//         end else begin
+//             r_pd_times_v    <= 0;
+//         end
+//     end
+// 
+//     always @(posedge clk or negedge rstn) begin
+//         if(~rstn) begin
+//             r_pd_times_v_1d <= 0;
+//             r_pd_times_v_2d <= 0;
+//             r_pd_times_v_3d <= 0;
+//             r_pd_times_v_4d <= 0;
+//             r_pd_times_v_5d <= 0;
+//         end else begin
+//             r_pd_times_v_1d <= r_pd_times_v;
+//             r_pd_times_v_2d <= r_pd_times_v_1d;
+//             r_pd_times_v_3d <= r_pd_times_v_2d;
+//             r_pd_times_v_4d <= r_pd_times_v_3d;
+//             r_pd_times_v_5d <= r_pd_times_v_4d;
+//         end
+//     end
 
 // valid_0 valid_1
     always @(posedge clk or negedge rstn) begin
@@ -416,15 +449,24 @@ pre_data_3p pre_data_3p(
     );
 `elsif INCLUDE_MODULE_BROADCAST
     assign o_need = pre_data_G_i_v;
+    // assign pre_data_G_X1_x = i_x1;
+    // assign pre_data_G_X1_y = i_y1;
+    // assign pre_data_G_X2_x = i_x2;
+    // assign pre_data_G_X2_y = i_y2;
+    // assign pre_data_G_X3_x = i_x3;
+    // assign pre_data_G_X3_y = i_y3;
+    // assign pre_data_G_X4_x = i_x4;
+    // assign pre_data_G_X4_y = i_y4;
     assign pre_data_G_X1_x = i_x1;
     assign pre_data_G_X1_y = i_y1;
-    assign pre_data_G_X2_x = i_x2;
-    assign pre_data_G_X2_y = i_y2;
-    assign pre_data_G_X3_x = i_x3;
-    assign pre_data_G_X3_y = i_y3;
-    assign pre_data_G_X4_x = i_x4;
-    assign pre_data_G_X4_y = i_y4;
-    assign pre_data_G_o_v  = i_loop_point&&(i_id == (pre_data_G_i_j - 1));
+    assign pre_data_G_X2_x = i_x1;
+    assign pre_data_G_X2_y = i_y1;
+    assign pre_data_G_X3_x = i_x1;
+    assign pre_data_G_X3_y = i_y1;
+    assign pre_data_G_X4_x = i_x1;
+    assign pre_data_G_X4_y = i_y1;
+    // assign pre_data_G_o_v  = i_loop_point&&(i_id == (pre_data_G_i_j - 1));
+    assign pre_data_G_o_v  = i_loop_point;
     assign t1_mul0_a_i          = 0;
     assign t1_mul0_b_i          = 0;
     assign t1_mul0_ab_valid_i   = 0;

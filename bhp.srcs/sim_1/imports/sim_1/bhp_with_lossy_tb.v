@@ -67,22 +67,13 @@ module bhp_with_lossy_tb;
     wire [255:0] w_tb_mul_rslt_pad;   // Padded result (256 bits) sent back to DUT
     wire         w_tb_mul_rslt_vld;   // Result valid signal sent back to DUT
 
-/*
+
     localparam ST_IDLE    = 1;
     localparam ST_BHP     = 2;
     localparam ST_LOSSY   = 3;
     localparam ST_OUTPUT  = 4;
     localparam ST_RST     = 5;
     localparam ST_FINISH  = 6;
-  */ 
-    localparam ST_IDLE      = 1;
-    localparam ST_INIT      = 2; // 之前缺少这个
-    localparam ST_BHP       = 3;
-    localparam ST_LOSSY     = 4;
-    localparam ST_LOSSY_BUF = 5; // 之前缺少这个
-    localparam ST_OUTPUT    = 6;
-    localparam ST_RST       = 7;
-    localparam ST_FINISH    = 8;
 
     localparam B8   = 3'b001;
     localparam B16  = 3'b010;
@@ -102,14 +93,10 @@ module bhp_with_lossy_tb;
 
       localparam integer WIDTH = 256;
       localparam integer DEPTH = 684;
-      reg [WIDTH-1:0] xmem [0:DEPTH-1];// 瀛樺偍鏁扮粍锛氱储寮? 0..683
-      reg [WIDTH-1:0] ymem [0:DEPTH-1];// 瀛樺偍鏁扮粍锛氱储寮? 0..683
+      reg [WIDTH-1:0] xmem [0:DEPTH-1];// 存储数组：索引 0..683
+      reg [WIDTH-1:0] ymem [0:DEPTH-1];// 存储数组：索引 0..683
       reg [8*256-1:0] XDATA_FILE;
       reg [8*256-1:0] YDATA_FILE;
-      
-      // --- [REMOVED] Old Broadcast Variables ---
-      // Reason: Frame assembly is no longer done in TB.
-      /*
       reg [32-1:0] ID;
       reg [32+WIDTH*8-1:0] FRAME;
       reg [WIDTH-1:0] FRAMEX1;
@@ -122,7 +109,6 @@ module bhp_with_lossy_tb;
       reg [WIDTH-1:0] FRAMEY4;
       reg [31:0] frame_data_out;
       reg frame_valid_out;
-      */
       integer fd;
       integer i;
       integer FRAME_i;
@@ -130,7 +116,7 @@ module bhp_with_lossy_tb;
       integer frame_id;
       integer read_items;
 
-   // wire         top_request;
+    wire         top_request;
     reg [256 - 1:0]i_sp_x;
     reg [256 - 1:0]i_sp_y;
     reg [ 10 - 1:0]i_sp_i;
@@ -147,31 +133,15 @@ module bhp_with_lossy_tb;
 
     reg zzt_testcase_r;
     reg zzt_testcase_pause1_r;
-    
-// --- [NEW] Additional Control & Lookup Signals ---
-    reg           i_start_run; // To trigger the core
-    
-    // Connect to DUT's lookup interface
-    wire [32-1:0] o_core_id;
-    wire [2:0]    o_core_chunk;
-    wire          o_core_req_vld;
-    
-    // Logic to drive these inputs to DUT
-    reg [256-1:0] i_core_base_x;
-    reg [256-1:0] i_core_base_y;
-    reg           i_core_base_vld;
 
-    // Monitor output (optional connection)
-    wire          o_core_change_start;
-    wire [256-1:0] o_core_x1_start;
-    wire [256-1:0] o_core_y1_start;
-    
-    //new
-    integer index;
-    integer error;
-    integer temp_ready;
-    integer look_idx;
-    
+    reg [256-1:0] BHP_sp_x;
+    reg [256-1:0] BHP_sp_y;
+    reg [ 10-1:0] BHP_sp_i;
+
+    reg            rx_o_v ;
+    reg  [256-1:0] rx_o_x1;
+    reg  [256-1:0] rx_o_y1;
+    wire [9:0]     pd_addr;
     // Instantiate the Unit Under Test (UUT)
     bhp_with_lossy #(
         .QID_WIDTH (QID_WIDTH)   
@@ -184,6 +154,11 @@ module bhp_with_lossy_tb;
         .i_a(i_a),
         .i_size(i_size),
         .i_signed(i_signed),
+        .i_sp_x(BHP_sp_x),
+        .i_sp_y(BHP_sp_y),
+        .i_sp_i(BHP_sp_i),
+
+
 
         `ifdef LVS_R_V
         .i_lvs_rdy  (o_lvs_vld  ),    // indicate if downstream is ready
@@ -205,32 +180,14 @@ module bhp_with_lossy_tb;
         // .i_sp_x     (i_sp_x     ),
         // .i_sp_y     (i_sp_y     ),
         // .i_sp_i     (i_sp_i     ),
-        // --- [MODIFIED] Direct Start Point Connection ---
-        .i_sp_x     (i_sp_x     ),
-        .i_sp_y     (i_sp_y     ),
-        .i_sp_i     (i_sp_i     ),
-        // --- [NEW] Start Trigger ---
-        .i_start_run (i_start_run),
-        
-        // --- [REMOVED] Old Broadcast Ports ---
-        /*
-        .top_request(top_request),//pluse
-        .bc_din     (frame_data_out     ),
-        .bc_in_valid(frame_valid_out    ),
-        */
-// --- [NEW] Lookup Interface Connections ---
-        .o_core_id          (o_core_id),
-        .o_core_chunk       (o_core_chunk),
-        .o_core_req_vld     (o_core_req_vld),
-        
-        .i_core_base_x      (i_core_base_x),
-        .i_core_base_y      (i_core_base_y),
-        .i_core_base_vld    (i_core_base_vld),
+        .top_request   (top_request),//pluse
+        .rx_o_v        (rx_o_v     ),
+        .rx_o_x1       (rx_o_x1    ),
+        .rx_o_y1       (rx_o_y1    ),
+        .pd_addr       (pd_addr    ),
+        // .bc_din     (frame_data_out     ),
+        // .bc_in_valid(frame_valid_out    ),
 
-        .o_core_change_start(o_core_change_start),
-        .o_core_x1_start    (o_core_x1_start),
-        .o_core_y1_start    (o_core_y1_start),
-        
         // add QID 
         .i_qid(i_qid), 
         .o_qid(o_qid),
@@ -276,37 +233,7 @@ module bhp_with_lossy_tb;
 	
 	
 	
-	// --- [NEW] Lookup Responder Logic ---
-    // This mimics the behavior of an external memory/table.
-    // It listens for requests from DUT (o_core_req_vld) and provides data.
-    always @(posedge clk) begin
-        if (!rstn) begin
-            i_core_base_vld <= 0;
-            i_core_base_x   <= 0;
-            i_core_base_y   <= 0;
-        end else if (o_core_req_vld) begin
-            // Mapping logic:
-            // o_core_id corresponds to the Generator Index (1-based).
-            // o_core_chunk[2:1] corresponds to selection index 0..3 (x1..x4)
-            // Global Index = (ID - 1) * 4 + chunk_index
-            // NOTE: o_core_chunk comes from bit3. 
-            // If bit3[1:0] selects the point (0=x1, 1=x2...), we use that.
-            look_idx = (o_core_id - 1) * 4 + o_core_chunk[1:0]; 
-			//look_idx = (o_core_id - 1) * 4 + o_core_chunk[2:1];
-            
-            if (look_idx >= 0 && look_idx < DEPTH) begin
-                i_core_base_x   <= xmem[look_idx];
-                i_core_base_y   <= ymem[look_idx];
-                i_core_base_vld <= 1;
-            end else begin
-                i_core_base_x   <= 0;
-                i_core_base_y   <= 0;
-                i_core_base_vld <= 0;
-            end
-        end else begin
-            i_core_base_vld <= 0;
-        end
-    end
+	
 	
     // Clock generation: 10ns period (100MHz)
     always #5 clk = ~clk;
@@ -326,7 +253,7 @@ module bhp_with_lossy_tb;
         i_size <= 0;
         cur_res <= 0;
         zzt_out <= 0;
-        reverse <= 0; // 1: 杈撳叆姝ｅ簭锛屼笉闇?瑕乼b涓弽搴? 0: 杈撳叆閫嗗簭锛岄渶瑕乼b涓弽搴?
+        reverse <= 0; // 1: 输入正序，不需要tb中反序 0: 输入逆序，需要tb中反序
         zzt_data <= 0;
         exp_rslt <= 0;
         i_signed <= 0;
@@ -371,7 +298,7 @@ module bhp_with_lossy_tb;
     $display("Starting bhp_with_lossy pause lvs testbench...");
         reverse  <=  0;
         temp_ready = 1000;
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         // if (fd_lvs == 0) begin
         //     $display("Error: Failed to open file!");
         // end else begin
@@ -387,7 +314,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs_right.txt";
         check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B16_U_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B16_U_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  2;
         zzt_data <=  {PAD16__0,16'b1110110100111010};
         zzt_out  <=  256'd55547;
@@ -397,7 +324,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B16_U_lvs_right.txt";
         check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B32_U_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B32_U_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  3;
         zzt_data <=  {PAD32__0,32'b11101101001110101101101010100000};
         zzt_out  <=  256'd464081867;
@@ -407,7 +334,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B32_U_lvs_right.txt";
         check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B64_I_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B64_I_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  4;
         zzt_data <=  {PAD64__0,64'b1000011110001101111000001111110000001101011110111011111110100110};
         zzt_out  <= -256'd3757354933473194135;
@@ -417,7 +344,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B64_I_lvs_right.txt";
         check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B128_U_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B128_U_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  5;
         zzt_data <=  {128'b00001001101100010100111001110011010110010101000110010011000011010101011111011010000011100100111100110100100010101100000100001001};
         zzt_out  <=  256'd240735502027167243905959988592635201365;
@@ -432,7 +359,7 @@ module bhp_with_lossy_tb;
 
     $display("Starting bhp_with_lossy all lvs testbench...");
         reverse  <=  0;
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  0;
         zzt_data <=  {PAD8___0,8'b01101000};
         zzt_out  <= -256'd119;
@@ -445,7 +372,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs_right.txt";
         // check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  1;
         zzt_data <=  {PAD8___0,8'b01101000};
         zzt_out  <= -256'd119;
@@ -455,7 +382,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B8_I_lvs_right.txt";
         check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B16_U_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B16_U_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  2;
         zzt_data <=  {PAD16__0,16'b1110110100111010};
         zzt_out  <=  256'd55547;
@@ -465,7 +392,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B16_U_lvs_right.txt";
         check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B32_U_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B32_U_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  3;
         zzt_data <=  {PAD32__0,32'b11101101001110101101101010100000};
         zzt_out  <=  256'd464081867;
@@ -475,7 +402,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B32_U_lvs_right.txt";
         check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B64_I_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B64_I_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  4;
         zzt_data <=  {PAD64__0,64'b1000011110001101111000001111110000001101011110111011111110100110};
         zzt_out  <= -256'd3757354933473194135;
@@ -485,7 +412,7 @@ module bhp_with_lossy_tb;
         pathB = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B64_I_lvs_right.txt";
         check_file_diff(pathA, pathB);
 
-        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B128_U_lvs.txt", "w"); // "w" 瑕嗙洊鍐欙紱鐢? "a" 杩藉姞鍐?
+        fd_lvs = $fopen("D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\B128_U_lvs.txt", "w"); // "w" 覆盖写；用 "a" 追加写
         lvs_test <=  5;
         zzt_data <=  {128'b00001001101100010100111001110011010110010101000110010011000011010101011111011010000011100100111100110100100010101100000100001001};
         zzt_out  <=  256'd240735502027167243905959988592635201365;
@@ -626,7 +553,7 @@ module bhp_with_lossy_tb;
     // i_sp_i =  10'd3                                                                            ;
     // i_sp_x = 256'd7539827211807812640588073995985862694710181606199261327909835760242386212513 ;// /bhp_with_lossy_tb/uut/uut_bhp_256_top/u_bhp_256/u_montgomery_add_lookup/sum_x
     // i_sp_y = 256'd4785478201797595594823195618693701038564393637142573479503580808304613575375 ;// /bhp_with_lossy_tb/uut/uut_bhp_256_top/u_bhp_256/u_montgomery_add_lookup/sum_y
-    // i_sp_i =  10'd56                                                                           ;// /bhp_with_lossy_tb/uut/uut_bhp_256_top/u_bhp_256/u_montgomery_add_lookup/MG_j 鐨勬渶鍚庝竴涓椂閽熷懆鏈熷搴旂殑鍊尖啈
+    // i_sp_i =  10'd56                                                                           ;// /bhp_with_lossy_tb/uut/uut_bhp_256_top/u_bhp_256/u_montgomery_add_lookup/MG_j 的最后一个时钟周期对应的值↑
     i_sp_x = 256'd7126799769708027016315449572891096098166498552937892718894893847957882327955;
     i_sp_y = 256'd3917582819500725305888864628750270963250772406962484286785793128550891813719;
     i_sp_i =  10'd57;
@@ -638,174 +565,41 @@ module bhp_with_lossy_tb;
     // i_sp_y = 256'd5003478838945884235464731887834196301181106531947846961460406073321199736998 ;
     // i_sp_i =  10'd64                                                                           ;
 
-    FRAME_i_start = i_sp_i;
+    BHP_sp_x <= i_sp_x;
+    BHP_sp_y <= i_sp_y;
+    BHP_sp_i <= i_sp_i;
+    rx_o_v  <= 0;
+    rx_o_x1 <= 0;
+    rx_o_y1 <= 0;
+    $display("BHP_sp_i");
+
     XDATA_FILE = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\X_171_x1x2x3x4.txt";
     YDATA_FILE = "D:\\FPGA\\aleo_prj\\bhp256\\sim_1\\Y_171_x1x2x3x4.txt";
-    // 璋冪敤鍔犺浇浠诲姟
+    // 调用加载任务
     load_xmem_from_decimal_txt;
     load_ymem_from_decimal_txt;
     xymem_showtest;
-    
-    
-    i_start_run = 0;
-    
-    // $display("i_sp_i = %0d", FRAME_i_start);
-    // $display("i_sp_x = %0d", xmem[FRAME_i_start-1]);
-    // $display("i_sp_i = %0d", ymem[FRAME_i_start-1]);
-      // 鍒濆鍖栬緭鍑轰俊鍙?
-      /*
-      frame_data_out = 32'b0;
-      frame_valid_out = 1'b0;
-      ID    = 0;
-      FRAME = 0;
-      FRAMEX1 = 0;
-      FRAMEX2 = 0;
-      FRAMEX3 = 0;
-      FRAMEX4 = 0;
-      FRAMEY1 = 0;
-      FRAMEY2 = 0;
-      FRAMEY3 = 0;
-      FRAMEY4 = 0;
-      frame_id = 0;
-      */
-      #100;
-    // ID
-    // x鐨?1鍊?2鍊?3鍊?4鍊?: xmem[0],xmem[1],xmem[2],xmem[3]
-    // y鐨?1鍊?2鍊?3鍊?4鍊?: ymem[0],ymem[1],ymem[2],ymem[3]
-    // FRAME = {32'd15,256'd1,256'd2,256'd3,256'd4,256'd5,256'd6,256'd7,256'd8};
-    // FRAME = {32'h01,32'h02,32'h03,32'h04,32'h05,32'h06,32'h07,32'h08,32'h09,32'h0A,32'h0B,32'h0C,32'h0D,32'h0E,32'h0F,32'h10,32'h11,32'h12,32'h13,32'h14,32'h15,32'h16,32'h17,32'h18,32'h19,32'h1A,32'h1B,32'h1C,32'h1D,32'h1E,32'h1F,32'h20,32'h21,32'h22,32'h23,32'h24,32'h25,32'h26,32'h27,32'h28,32'h29,32'h2A,32'h2B,32'h2C,32'h2D,32'h2E,32'h2F,32'h30,32'h31,32'h32,32'h33,32'h34,32'h35,32'h36,32'h37,32'h38,32'h39,32'h3A,32'h3B,32'h3C,32'h3D,32'h3E,32'h3F,32'h40,32'h41};
-
-
-
-    while (1) begin
-        // RUN_ONCE: begin         // 鍛藉悕鍧楋細琚? o_res_vld 鎵撴柇鏃跺彲鏁翠綋閫?鍑?
-       
-            // START
-            // --- [MODIFIED] Trigger Logic ---
-            // Old Logic: Used 'output_frame' to push data.
-            // New Logic: Manually trigger the core with i_start_run.
-             #100;
-         i_lvs_rdy <= 1;
-         i_size    <= B8;  // 或 B64, 根据您想测的模式
-        i_signed  <= I;   // Signed   
-        i_qid     <= 0;
-            #10; 
-        //i_vld <= 1; 
-        #10;        // 维持 1 个周期 (等同于 @posedge clk)
-        //i_vld <= 0;
-
-        // 缓冲：给状态机一点时间完成跳转
-        #20; 
-
-        // 第二步：发送 Start，触发计算 (INIT -> BHP)
-        #10; 
-        //i_start_run <= 1; // 这才是真正的点火！
-        #10;              // 维持 1 个周期
-        //i_start_run <= 0;
-            $display("[%0t] Core Triggered. Signals set: i_lvs_rdy=1, i_size=B8. Waiting...", $time);
-            @(posedge o_res_vld);
-        
-            $display("[%0t] Calculation Finished! Result Valid received.", $time);
-            #1000;
-            $finish;
-       end
-end          
-            /*
-            ID = {1'b1,21'b0,i_sp_i};
-            FRAMEX1 = i_sp_x; FRAMEY1 = i_sp_y;
-            FRAMEX2 = 0; FRAMEY2 = 0;
-            FRAMEX3 = 0; FRAMEY3 = 0;
-            FRAMEX4 = 0; FRAMEY4 = 0;
-            FRAME = {ID,FRAMEX1,FRAMEY1,FRAMEX2,FRAMEY2,FRAMEX3,FRAMEY3,FRAMEX4,FRAMEY4};
-            
-            #100;
+    while (1)
+        begin
             @(posedge top_request);
-            output_frame;
-            // $display("output_frame_start",);
-            // LOOP
-            for (FRAME_i = FRAME_i_start; FRAME_i < 171; FRAME_i = FRAME_i + 1) begin
-                // 绛夊緟 鈥滃彂璧疯姹傗?? 鎴? 鈥滅粨鏋滄湁鏁堚??
-                @(posedge top_request or posedge o_res_vld);
-                // 鑻ュ湪涓?斿嚭鐜? o_res_vld 涓婂崌娌库?斺?旂珛鍗抽噸鍚暣杞? for
-                if (o_res_vld) begin
-                    // 鍙?夛細鎵撲竴鎷嶏紝閬垮厤绔嬪埢鍐嶆挒涓婂悓涓?涓珮鐢靛钩
-                    // @(negedge o_res_vld);
-                    // disable RUN_ONCE;  // 閫?鍑哄懡鍚嶅潡锛寃hile 浼氱珛鍒诲紑濮嬫柊涓?杞?
-                    FRAME_i = 171;
-                end
-                // 姝ｅ父鎵ц杩欎竴甯?
-                frame_id = FRAME_i;
-                ID = frame_id;
-                FRAMEX1 = xmem[frame_id * 4 + 0]; FRAMEY1 = ymem[frame_id * 4 + 0];
-                FRAMEX2 = xmem[frame_id * 4 + 1]; FRAMEY2 = ymem[frame_id * 4 + 1];
-                FRAMEX3 = xmem[frame_id * 4 + 2]; FRAMEY3 = ymem[frame_id * 4 + 2];
-                FRAMEX4 = xmem[frame_id * 4 + 3]; FRAMEY4 = ymem[frame_id * 4 + 3];
-                FRAME = {ID,FRAMEX1,FRAMEY1,FRAMEX2,FRAMEY2,FRAMEX3,FRAMEY3,FRAMEX4,FRAMEY4};
+            if(top_request) begin
                 #100;
-                output_frame;
+                rx_o_x1 = xmem[pd_addr];
+                rx_o_y1 = ymem[pd_addr];
+                @(posedge clk);
+                rx_o_v <= 1;
+                @(posedge clk);
+                rx_o_v  <= 0;
+                rx_o_x1 <= 0;
+                rx_o_y1 <= 0;
             end
         end
-        // 璧板埌杩欓噷鏈変袱绉嶆儏鍐碉細
-        // 1) for 姝ｅ父璺戝畬锛?2) 琚? o_res_vld 鎵撴柇 disable RUN_ONCE銆?
-        // 涓ょ鎯呭喌涓嬮兘浼氱珛鍗冲洖鍒? while 椤堕儴锛岄噸鏂板紑濮嬫柊涓?杞? RUN_ONCE銆?
-    end
-    #10 $finish;
   end
-*/
 
 
-// --- [DEBUG 1] 状态机实时监控 ---
-    // 只要 cur_state 发生变化，就打印出来
-    always @(cur_state) begin
-        case(cur_state)
-            ST_IDLE:      $display("[%0t] [STATE] -> IDLE (Waiting for i_vld)", $time);
-            ST_INIT:      $display("[%0t] [STATE] -> INIT (Waiting for i_start_run)", $time);
-            ST_BHP:       $display("[%0t] [STATE] -> BHP (Core Running...)", $time);
-            ST_LOSSY:     $display("[%0t] [STATE] -> LOSSY (Processing)", $time);
-            ST_LOSSY_BUF: $display("[%0t] [STATE] -> LOSSY_BUF", $time);
-            ST_OUTPUT:    $display("[%0t] [STATE] -> OUTPUT (Results Ready)", $time);
-            ST_RST:       $display("[%0t] [STATE] -> RST", $time);
-            ST_FINISH:    $display("[%0t] [STATE] -> FINISH", $time);
-            default:      $display("[%0t] [STATE] -> Unknown State: %d", $time, cur_state);
-        endcase
-    end
-    
-// --- [DEBUG 2] 交互握手监控 ---
-    always @(posedge clk) begin
-        // 监测：核心是否发出了请求？
-        if (o_core_req_vld) begin
-            $display("[%0t] [HANDSHAKE] >> REQ: DUT wants ID=%d, Chunk=%d", $time, o_core_id, o_core_chunk);
-        end
-        
-        // 监测：TB 是否回传了有效数据？
-        if (i_core_base_vld) begin
-            $display("[%0t] [HANDSHAKE] << ACK: TB sent Base_X/Y. (idx=%0d)", $time, look_idx);
-        end
-
-        // 监测：是否因为 Ready 信号未就绪导致 i_vld 被忽略？
-        if (i_vld && !o_rdy) begin
-            $display("[%0t] [WARNING] i_vld assertion FAILED! o_rdy is LOW.", $time);
-        end
-    end
-	
-	/*
-    // --- [DEBUG 3] 超时强制停止 ---
-    initial begin
-        // 设置一个足够长的时间（根据仿真需要调整，例如 500us）
-        #500000000; 
-        $display("\n--------------------------------------------------");
-        $display("[%0t] [ERROR] TIMEOUT! Simulation stuck.", $time);
-        $display("Current State: %d", cur_state);
-        $display("Is o_rdy high? : %b", o_rdy);
-        $display("Is o_res_vld high? : %b", o_res_vld);
-        $display("--------------------------------------------------\n");
-        $finish;
-    end    
-    
-*/    
 always @(posedge clk) begin
     if (i_lvs_rdy && o_lvs_vld) begin
-      // %064h锛氬浐瀹氬搴? 64 涓崄鍏繘鍒跺瓧绗︼紝鍓嶅 0 琛ラ綈锛孧SB 鍦ㄥ乏
+      // %064h：固定宽度 64 个十六进制字符，前导 0 补齐，MSB 在左
       if(lvs_test != 0)
         $fdisplay(fd_lvs, "%064d", o_lvs);
     end
@@ -831,15 +625,15 @@ always @(posedge clk)
     if(data_count > data_count_max)
         data_count_max <= data_count;
 always @(posedge clk) begin
-    // if (i_res_rdy && o_res_vld) begin// res 鍙嶅帇
-    if (o_res_vld) begin// 娌℃湁鍙嶅帇
+    // if (i_res_rdy && o_res_vld) begin// res 反压
+    if (o_res_vld) begin// 没有反压
         cur_res <= o_res;
     end
 end
 
 reg [255:0] zzt_testcase_cnt;
 always @(posedge clk) begin
-    if (zzt_testcase_r) begin// 娌℃湁鍙嶅帇
+    if (zzt_testcase_r) begin// 没有反压
         zzt_testcase_cnt <= zzt_testcase_cnt +1;
     end
 end
@@ -851,7 +645,7 @@ reg [255:0] zzt_testcase_cnt__32_max;
 reg [255:0] zzt_testcase_cnt__64_max;
 reg [255:0] zzt_testcase_cnt_128_max;
 always @(posedge clk) begin
-    if (zzt_testcase_r) begin// 娌℃湁鍙嶅帇
+    if (zzt_testcase_r) begin// 没有反压
         if(zzt_testcase_cnt_max <= zzt_testcase_cnt)
             zzt_testcase_cnt_max <= zzt_testcase_cnt;
     end
@@ -970,9 +764,6 @@ task zzt_testcase_pause;
         out      <= task_out;
         i_vld <= 1;#10;
         i_vld <= 0;
-		#100;
-		i_start_run <= 1;#10;
-		i_start_run <= 0;
         i_lvs_rdy <= 0;
         // cur_res <= o_res;
         #200;
@@ -1065,26 +856,26 @@ task check_file_diff;
       disable check_file_diff;
     end
 
-    // 缁熻 A 鏂囦欢琛屾暟
+    // 统计 A 文件行数
     countA = 0;
     while (!$feof(fdA)) begin
       if ($fgets(lineA, fdA))
         countA = countA + 1;
     end
 
-    // 缁熻 B 鏂囦欢琛屾暟
+    // 统计 B 文件行数
     countB = 0;
     while (!$feof(fdB)) begin
       if ($fgets(lineB, fdB))
         countB = countB + 1;
     end
 
-    // 妫?鏌ユ槸鍚? A 姣? B 澶? 2 琛?
+    // 检查是否 A 比 B 多 2 行
     if (countA - countB != 2) begin
       $display("FAIL: File A has %0d lines, File B has %0d lines (not +2).", countA, countB);
     end
 
-    // 閲嶆柊鎵撳紑鏂囦欢鐢ㄤ簬閫愯姣旇緝
+    // 重新打开文件用于逐行比较
     $fclose(fdA);
     $fclose(fdB);
     fdA = $fopen(fileA_path, "r");
@@ -1156,10 +947,7 @@ task zzt_testcase;
         out      <= task_out;
         i_vld <= 1;#10;
         i_vld <= 0;
-		#10; // Small gap
-        i_start_run <= 1; 
-        #10; // Pulse width of 1 cycle (assuming 10ns clock period)
-        i_start_run <= 0;
+		
 		
 		//QID3 make noise 
 		noise_qid = ~exp_qid; 
@@ -1240,32 +1028,30 @@ endtask
   task output_frame;
     integer i;
     begin
-      /*
-      // 鍒濆鍖栬緭鍑轰俊鍙?
+      // 初始化输出信号
       frame_data_out = 32'b0;
       frame_valid_out = 1'b0;
-      // 閬嶅巻FRAME锛屼粠鏈?楂?32浣嶅紑濮嬭緭鍑?
+      // 遍历FRAME，从最高32位开始输出
       for (i = (32+WIDTH*8)/32 - 1; i >= 0; i = i - 1) begin
-        // 绛夊緟鏃堕挓涓婂崌娌?
+        // 等待时钟上升沿
         @(posedge clk);
-        // 杈撳嚭褰撳墠32浣嶆暟鎹?
-        frame_data_out = FRAME[i*32 +: 32];  // 浠庣i*32浣嶅紑濮嬪彇32浣?
+        // 输出当前32位数据
+        frame_data_out = FRAME[i*32 +: 32];  // 从第i*32位开始取32位
         frame_valid_out = 1'b1;
-        // 鍙?夛細绛夊緟涓?涓椂閽熷懆鏈燂紝淇濇寔杈撳嚭绋冲畾
+        // 可选：等待一个时钟周期，保持输出稳定
         // @(posedge clk);
       end
-      // 鏈?鍚庝竴涓暟鎹緭鍑哄悗锛屽湪涓嬩竴涓椂閽熸部鍏抽棴鏈夋晥淇″彿
+      // 最后一个数据输出后，在下一个时钟沿关闭有效信号
       @(posedge clk);
       frame_valid_out = 1'b0;
       frame_data_out = 32'b0;
-      */
     end
   endtask
 
 
   task xymem_showtest;
     begin
-      // 绠?鍗曢獙璇佹墦鍗帮細鍓? 2 琛屼笌鏈?鍚? 2 琛?
+      // 简单验证打印：前 2 行与最后 2 行
       $display("--------------------------------------------------");
       $display("xmem[0]   = %0d", xmem[0]);
       $display("xmem[1]   = %0d", xmem[1]);
@@ -1280,28 +1066,28 @@ endtask
     end
   endtask
 
-  // 浠诲姟锛氫粠鍗佽繘鍒? TXT 閫愯璇诲叆鍒? xmem[]
+  // 任务：从十进制 TXT 逐行读入到 xmem[]
   task load_xmem_from_decimal_txt;
     begin
       fd = $fopen(XDATA_FILE, "r");
       if (fd == 0) begin
         $display("[%0t] ERROR: cannot open file: %0s", $time, XDATA_FILE);
-        $finish;
+        // $finish;
       end
 
       for (i = 0; i < DEPTH; i = i + 1) begin
         xmem[i] = {WIDTH{1'b0}};
       end
 
-      // 涓?琛屼竴琛岃鍙栧崄杩涘埗鍒? 256-bit 鍚戦噺
+      // 一行一行读取十进制到 256-bit 向量
       for (i = 0; i < DEPTH; i = i + 1) begin
-        // %d 璇诲彇鍗佽繘鍒讹紱\n 鍏佽鎸夎
+        // %d 读取十进制；\n 允许按行
         read_items = $fscanf(fd, "%d\n", xmem[i]);
         if (read_items != 1) begin
           $display("[%0t] ERROR: read failed at line %0d (index %0d). read_items=%0d",
                    $time, i+1, i, read_items);
           $fclose(fd);
-          $finish;
+          // $finish;
         end
       end
       $fclose(fd);
@@ -1312,22 +1098,22 @@ endtask
       fd = $fopen(YDATA_FILE, "r");
       if (fd == 0) begin
         $display("[%0t] ERROR: cannot open file: %0s", $time, YDATA_FILE);
-        $finish;
+        // $finish;
       end
 
       for (i = 0; i < DEPTH; i = i + 1) begin
         ymem[i] = {WIDTH{1'b0}};
       end
 
-      // 涓?琛屼竴琛岃鍙栧崄杩涘埗鍒? 256-bit 鍚戦噺
+      // 一行一行读取十进制到 256-bit 向量
       for (i = 0; i < DEPTH; i = i + 1) begin
-        // %d 璇诲彇鍗佽繘鍒讹紱\n 鍏佽鎸夎
+        // %d 读取十进制；\n 允许按行
         read_items = $fscanf(fd, "%d\n", ymem[i]);
         if (read_items != 1) begin
           $display("[%0t] ERROR: read failed at line %0d (index %0d). read_items=%0d",
                    $time, i+1, i, read_items);
           $fclose(fd);
-          $finish;
+          // $finish;
         end
       end
       $fclose(fd);

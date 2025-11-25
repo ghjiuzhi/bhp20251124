@@ -36,35 +36,18 @@ module bhp_256_top(
     input  wire [256 - 1 : 0]   top_inv_rslt_o       ,
     input  wire                 top_inv_rslt_valid_o ,
 
-/*
-    input  wire [32-1:0]        i_id,
+//     input  wire [32-1:0]        i_id,
     input  wire                 i_loop_point,
     input  wire [256 - 1 : 0]   i_x1        ,
     input  wire [256 - 1 : 0]   i_y1        ,
-    input  wire [256 - 1 : 0]   i_x2        ,
-    input  wire [256 - 1 : 0]   i_y2        ,
-    input  wire [256 - 1 : 0]   i_x3        ,
-    input  wire [256 - 1 : 0]   i_y3        ,
-    input  wire [256 - 1 : 0]   i_x4        ,
-    input  wire [256 - 1 : 0]   i_y4        ,
-*/
-
-// --- [NEW] Request Interface (Output) ---
-    output wire [32-1:0]        o_id,           // Tell external: I need this ID
-    output wire [2:0]           o_chunk_val,    // Tell external: I need this Choice
-    output wire                 o_req_vld,      // Request valid
-
-    // --- [NEW] Data Return Interface (Input) ---
-    input  wire [256 - 1 : 0]   i_base_x,       // External returns the single correct X
-    input  wire [256 - 1 : 0]   i_base_y,       // External returns the single correct Y
-    input  wire                 i_base_vld,     // Data valid (Replacing i_loop_point)
-
-    // --- [NEW] Special Broadcast Info ---
-    output wire                 o_change_start,
-    output wire [256 - 1 : 0]   o_x1_start,
-    output wire [256 - 1 : 0]   o_y1_start,
-    
+    // input  wire [256 - 1 : 0]   i_x2        ,
+    // input  wire [256 - 1 : 0]   i_y2        ,
+    // input  wire [256 - 1 : 0]   i_x3        ,
+    // input  wire [256 - 1 : 0]   i_y3        ,
+    // input  wire [256 - 1 : 0]   i_x4        ,
+    // input  wire [256 - 1 : 0]   i_y4        ,
     output wire o_need,
+    output wire [9:0] pd_addr,
     output wire mal_result_valid
 
 
@@ -260,31 +243,19 @@ bhp_256 u_bhp_256 (
         .top_inv_ab_valid_i           (top_inv_ab_valid_i   ),
         .top_inv_rslt_o               (top_inv_rslt_o       ),
         .top_inv_rslt_valid_o         (top_inv_rslt_valid_o),
-/*
-        .i_id                (i_id               ),
+
+//         .i_id                (i_id               ),
         .i_loop_point        (i_loop_point       ),
         .i_x1                (i_x1               ),
         .i_y1                (i_y1               ),
-        .i_x2                (i_x2               ),
-        .i_y2                (i_y2               ),
-        .i_x3                (i_x3               ),
-        .i_y3                (i_y3               ),
-        .i_x4                (i_x4               ),
-        .i_y4                (i_y4               ),
-*/
-// --- [ADD] New Connections ---
-    .o_id                   (o_id),
-    .o_chunk_val            (o_chunk_val),
-    .o_req_vld              (o_req_vld),
-
-    .i_base_x               (i_base_x),
-    .i_base_y               (i_base_y),
-    .i_base_vld             (i_base_vld),
-
-    .o_change_start         (o_change_start),
-    .o_x1_start             (o_x1_start),
-    .o_y1_start             (o_y1_start),
+        // .i_x2                (i_x2               ),
+        // .i_y2                (i_y2               ),
+        // .i_x3                (i_x3               ),
+        // .i_y3                (i_y3               ),
+        // .i_x4                (i_x4               ),
+        // .i_y4                (i_y4               ),
         .o_need              (o_need             ),
+        .pd_addr             (pd_addr            ),
         .mal_result_valid    (mal_result_valid   )
 
 );

@@ -18,11 +18,14 @@ module bhp_with_lossy #(
     input  wire                 rstn,
 
     // input channel
-    input  wire         i_vld,
-    output wire         o_rdy,
-    input  wire [127:0] i_a,
-    input  wire [  2:0] i_size,       // in alu_defs.vh
-    input  wire         i_signed,     // signed is 1, unsigned is 0
+    input  wire           i_vld,
+    output wire           o_rdy,
+    input  wire [127:0]   i_a,
+    input  wire [  2:0]   i_size,       // in alu_defs.vh
+    input  wire           i_signed,     // signed is 1, unsigned is 0
+    input  wire [256-1:0] i_sp_x,
+    input  wire [256-1:0] i_sp_y,
+    input  wire [ 10-1:0] i_sp_i,
 
     // output lvs channel
     input  wire         i_lvs_rdy,    // indicate if downstream is ready
@@ -39,23 +42,17 @@ module bhp_with_lossy #(
     output wire [  2:0] o_size      ,
     output wire         o_signed    ,
 
-// --- [MODIFIED] Start Point Interface ---
-    // REASON: The 32-bit stream decoder is removed. The start point (x, y, i)
-    // must now be provided directly by the testbench/top level.
-    input  wire [256-1:0] i_sp_x,
-    input  wire [256-1:0] i_sp_y,
-    input  wire [ 10-1:0] i_sp_i,
-    
-    // --- [NEW] Start Trigger ---
-    // REASON: Previously, 'fromrxto256' generated a pulse when a new frame started.
-    // Now, external logic must explicitly tell the core to start via this signal.
-    input  wire           i_start_run,
-    
-    // --- [REMOVED] Old 32-bit Broadcast Interface ---
-    //output wire           top_request,//pluse
-    //input  wire [31:0]    bc_din     ,
-    //input  wire           bc_in_valid,
 
+    // input  wire [256-1:0] i_sp_x,
+    // input  wire [256-1:0] i_sp_y,
+    // input  wire [ 10-1:0] i_sp_i,
+    output wire           top_request,//pluse
+    // input  wire [31:0]    bc_din     ,
+    // input  wire           bc_in_valid,
+    input  wire           rx_o_v ,
+    input  wire [256-1:0] rx_o_x1,
+    input  wire [256-1:0] rx_o_y1,
+    output wire [9:0]     pd_addr,
 
     output reg    [4:0] cur_state,      //todo // to delete //just for test
     output wire   [2:0] ft_data_count,   //todo // to delete //just for test
@@ -64,25 +61,7 @@ module bhp_with_lossy #(
     input wire [QID_WIDTH-1:0]  i_qid,
     output reg [QID_WIDTH-1:0]  o_qid,
 	
-    // --- [NEW] Lookup Interface (Passthrough) ---
-    // REASON: The core now "pulls" data. We must expose these request signals 
-    // so the testbench can see which ID is needed and provide the Base Point.
-  // 1. Request to External
-    output wire [32-1:0]  o_core_id,        // Requesting Chunk ID
-    output wire [2:0]     o_core_chunk,     // Requesting Chunk Choice
-    output wire           o_core_req_vld,   // Request Valid
-// 2. Response from External
-    input  wire [256-1:0] i_core_base_x,    // Base Point X from external table
-    input  wire [256-1:0] i_core_base_y,    // Base Point Y from external table
-    input  wire           i_core_base_vld,  // Base Point Valid signal
 
-    // --- [NEW] Core Status Monitor ---
-    // REASON: Allows the testbench to see when the core actually accepts 
-    // the new Start Point, helping with synchronization.
-    output wire           o_core_change_start,
-    output wire [256-1:0] o_core_x1_start,
-    output wire [256-1:0] o_core_y1_start,
-    
     // External multiplier interface
     // Data sent to TB (Output)
     output wire [255:0] top_mul0_a_i,        // Multiplier A
@@ -232,7 +211,7 @@ reg if_res_out;
 reg ro_res_vld_0d;
 
 reg ro_rdy;
-/*
+
 wire [32 -1:0] bc_o_id          ;
 wire           bc_o_loop_point  ;
 wire [256-1:0] bc_o_x1          ;
@@ -253,7 +232,7 @@ wire top_request_bc;
 reg            bc_ro_change_start   ;
 reg  [256-1:0] bc_ro_x1_start       ;
 reg  [256-1:0] bc_ro_y1_start       ;
-*/
+
 wire [255 : 0]   lvs_fifo_din   ;
 wire             lvs_fifo_wr_en ;
 
@@ -285,12 +264,11 @@ wire           test_full      ;
 wire           test_empty     ;
 wire [3 : 0]   test_data_count;
 
-/*
 wire top_request_temp;
 reg  top_request_temp_1d;
 wire top_request_temp_posedge;
 reg  top_request_r;
-*/
+
 reg  [10:0] lvs_cnt    ;
 wire [10:0] lvs_max    ;
 
@@ -305,6 +283,10 @@ wire [255:0]KBM_a    ;
 wire [255:0]KBM_b    ;
 
 wire         i_res_rdy;
+
+reg [256-1:0] ri_sp_x;
+reg [256-1:0] ri_sp_y;
+reg [ 10-1:0] ri_sp_i;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // INPUT
@@ -328,6 +310,9 @@ always @(posedge clk or negedge rstn) begin
         ri_data   <= 0;
         ri_size   <= 0;
         ri_signed <= 0;
+        ri_sp_x   <= 0;
+        ri_sp_y   <= 0;
+        ri_sp_i   <= 0;
     end else if(i_vld && o_rdy)begin
         ri_vld    <= 1;
         // ri_data   <= i_data  ;
@@ -405,11 +390,17 @@ always @(posedge clk or negedge rstn) begin
         else  ri_data <= i_data;
         ri_size   <= i_size  ;
         ri_signed <= i_signed;
+        ri_sp_x   <= i_sp_x;
+        ri_sp_y   <= i_sp_y;
+        ri_sp_i   <= i_sp_i;
     end else begin
         ri_vld    <= 0;
         ri_data   <= ri_data  ;
         ri_size   <= ri_size  ;
         ri_signed <= ri_signed;
+        ri_sp_x   <= ri_sp_x;
+        ri_sp_y   <= ri_sp_y;
+        ri_sp_i   <= ri_sp_i;
     end
 end
 
@@ -438,7 +429,7 @@ end
     always @(*) begin
         case (cur_state)
             ST_IDLE     : if(ri_vld                            ) next_state = ST_INIT       ; else next_state = ST_IDLE         ;
-            ST_INIT     : if(i_start_run              )          next_state = ST_BHP        ; else next_state = ST_INIT         ;
+            ST_INIT     : if(bc_ro_change_start                ) next_state = ST_BHP        ; else next_state = ST_INIT         ;
             ST_BHP      : if(bhp_ro_bhp256_rslt_vld            ) next_state = ST_LOSSY      ; else next_state = ST_BHP          ;
             ST_LOSSY    : if(los_o_rdy                         ) next_state = ST_LOSSY_BUF  ; else next_state = ST_LOSSY        ;
             ST_LOSSY_BUF: if(cnt_state == 5                    ) next_state = ST_OUTPUT     ; else next_state = ST_LOSSY_BUF    ;//todo
@@ -527,14 +518,11 @@ end
         // .i_sp_x             (i_sp_x     ),
         // .i_sp_y             (i_sp_y     ),
         // .i_sp_i             (i_sp_i     ),
- //       .i_sp_x             (bc_ro_x1_start        ),
-//        .i_sp_y             (bc_ro_y1_start        ),
- //       .i_sp_i             (bc_o_id[10-1:0]       ),
- //change
-        .i_sp_x             (i_sp_x                 ),
-        .i_sp_y             (i_sp_y                 ),
-        .i_sp_i             (i_sp_i                 ),
-        
+        .i_sp_x             (bc_ro_x1_start        ),
+        .i_sp_y             (bc_ro_y1_start        ),
+        //.i_sp_i             (bc_o_id[10-1:0]       ),
+        .i_sp_i             (ri_sp_i            ),
+
         .o_bhp256_rslt      (bhp_o_bhp256_rslt      ),
         .o_bhp256_rslt_vld  (bhp_o_bhp256_rslt_vld  ),
 
@@ -557,34 +545,18 @@ end
         .top_inv_rslt_o               (top_inv_rslt           ),
         .top_inv_rslt_valid_o         (top_inv_rslt_valid     ),
 
-// --- [MODIFIED] Lookup & Monitor Interface Connections ---
-        // Reason: Passing through new request/response signals to the core.
-        // Removed old broadcast signals: i_id, i_loop_point, i_x1..i_y4.
-        /*.i_id(bc_o_id),
+//         .i_id(bc_o_id),
         .i_loop_point        (bc_o_loop_point  ),
         .i_x1                (bc_o_x1          ),
         .i_y1                (bc_o_y1          ),
-        .i_x2                (bc_o_x2          ),
-        .i_y2                (bc_o_y2          ),
-        .i_x3                (bc_o_x3          ),
-        .i_y3                (bc_o_y3          ),
-        .i_x4                (bc_o_x4          ),
-        .i_y4                (bc_o_y4          ),
+        // .i_x2                (bc_o_x2          ),
+        // .i_y2                (bc_o_y2          ),
+        // .i_x3                (bc_o_x3          ),
+        // .i_y3                (bc_o_y3          ),
+        // .i_x4                (bc_o_x4          ),
+        // .i_y4                (bc_o_y4          ),
         .o_need              (bc_o_need        ),
-        */
-        // New Connections:
-        .o_id               (o_core_id),
-        .o_chunk_val        (o_core_chunk),
-        .o_req_vld          (o_core_req_vld),
-
-        .i_base_x           (i_core_base_x),
-        .i_base_y           (i_core_base_y),
-        .i_base_vld         (i_core_base_vld),
-
-        .o_change_start     (o_core_change_start),
-        .o_x1_start         (o_core_x1_start),
-        .o_y1_start         (o_core_y1_start),
-        
+        .pd_addr             (pd_addr          ),
         .mal_result_valid    (mal_result_valid )
 
 
@@ -1117,35 +1089,17 @@ end
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // broadcast
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/*
-fromrxto256 u_fromrxto256(
-    .clk            (clk ),
-    .rstn           (rstn),
-    .din            (bc_din           ),
-    .in_valid       (bc_in_valid      ),
 
-    .o_id(bc_o_id),
+// fromrxto256 u_fromrxto256(
 
-    .o_loop_point   (bc_o_loop_point  ),
-    .o_x1           (bc_o_x1          ),
-    .o_y1           (bc_o_y1          ),
-    .o_x2           (bc_o_x2          ),
-    .o_y2           (bc_o_y2          ),
-    .o_x3           (bc_o_x3          ),
-    .o_y3           (bc_o_y3          ),
-    .o_x4           (bc_o_x4          ),
-    .o_y4           (bc_o_y4          ),
-
-    .o_change_start (bc_o_change_start),//pluse
-    .o_x1_start     (bc_o_x1_start    ),
-    .o_y1_start     (bc_o_y1_start    ),
-
-    .i_need         (bc_o_need        ),
-    .top_request    (top_request_bc   )
-);
+assign top_request_bc = bc_o_need;
+assign bc_o_loop_point = rx_o_v;
+assign bc_o_x1 = rx_o_x1;
+assign bc_o_y1 = rx_o_y1;
 
 // assign top_request = top_request_bc || (cur_state == ST_INIT);
-assign top_request_temp = top_request_bc || (cur_state == ST_INIT);
+// assign top_request_temp = top_request_bc || (cur_state == ST_INIT);
+assign top_request_temp = top_request_bc;
 
 always @(posedge clk or negedge rstn) begin
     if(~rstn) begin
@@ -1169,8 +1123,10 @@ always @(posedge clk or negedge rstn) begin
     end
 end
 
-assign top_request = top_request_r && (~(bc_o_loop_point || bc_o_change_start));
+// assign top_request = top_request_r && (~(bc_o_loop_point || bc_o_change_start));
+assign top_request = top_request_r && (~(bc_o_loop_point));
 
+/*
 always @(posedge clk or negedge rstn) begin
     if(~rstn) begin
         bc_ro_change_start  <= 0;
@@ -1188,6 +1144,28 @@ always @(posedge clk or negedge rstn) begin
 end
 */
 
+
+
+always @(posedge clk or negedge rstn) begin
+    if(~rstn) begin
+        bc_ro_change_start  <= 0;
+        bc_ro_x1_start      <= 0;
+        bc_ro_y1_start      <= 0;
+    end else if(ri_vld)begin
+        bc_ro_change_start  <= 1;
+        bc_ro_x1_start      <= ri_sp_x;
+        bc_ro_y1_start      <= ri_sp_y;
+    end else begin
+        bc_ro_change_start  <= bc_ro_change_start;
+        bc_ro_x1_start      <= ri_sp_x;
+        bc_ro_y1_start      <= ri_sp_y;
+    end
+end
+
+
+
+
+
 `ifdef VIVADO_IP
 fifo_256_temp u_fifo_256_temp (
   .clk          (clk               ),       // input  wire clk
@@ -1198,7 +1176,7 @@ fifo_256_temp u_fifo_256_temp (
   .dout         (ft_dout           ),       // output wire [255 : 0] ft_dout      ;
   .full         (ft_full           ),       // output wire           ft_full      ;
   .empty        (ft_empty          ),       // output wire           ft_empty     ;
-  .data_count   (ft_data_count     )        // output wire [8 : 0]   ft_data_count;  // 浣嶅涓嶅噯纭?
+  .data_count   (ft_data_count     )        // output wire [8 : 0]   ft_data_count;  // 位宽不准硿
 );
 `elsif REG_IP
 sync_fifo_ptr
@@ -1243,7 +1221,7 @@ fifo_256_temp u_fifo_256_temp (
   .dout         (test_dout           ),       // output wire [255 : 0] ft_dout      ;
   .full         (test_full           ),       // output wire           ft_full      ;
   .empty        (test_empty          ),       // output wire           ft_empty     ;
-  .data_count   (test_data_count     )        // output wire [8 : 0]   ft_data_count;  // 浣嶅涓嶅噯纭?
+  .data_count   (test_data_count     )        // output wire [8 : 0]   ft_data_count;  // 位宽不准硿
 );
 `endif
 
