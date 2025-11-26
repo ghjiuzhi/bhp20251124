@@ -77,6 +77,15 @@ wire                w_bit0and1;
 
 reg                 reg_ready;
 
+
+// [NEW] Shadow registers for pipeline optimization
+reg                 shadow_sum_1;
+reg                 shadow_w_bit0and1;
+reg [256 - 1 : 0]   shadow_sum_x;
+reg [256 - 1 : 0]   shadow_sum_y;
+reg [256 - 1 : 0]   shadow_coeff_a;
+reg [256 - 1 : 0]   shadow_coeff_b;
+
 reg [257 - 1:0] montgomery_x;
 reg [257 - 1:0] montgomery_y;
 
@@ -165,7 +174,35 @@ wire                 t1_inv_rslt_valid_o  ,t2_inv_rslt_valid_o  ,t3_inv_rslt_val
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ª∫¥Ê ‰»Î ˝æ›
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   
+// [NEW] Shadow Register Latching Logic
     always @(posedge clk or negedge rstn) begin
+        if(~rstn) begin
+            shadow_sum_1       <= 0;
+            shadow_w_bit0and1  <= 0;
+            shadow_sum_x       <= 0;
+            shadow_sum_y       <= 0;
+            shadow_coeff_a     <= 0;
+            shadow_coeff_b     <= 0;
+        end else if(pre_data_G_o_v) begin 
+            // Save critical signals before they are overwritten by the new task
+            shadow_sum_1       <= sum_1;
+            shadow_w_bit0and1  <= w_bit0and1;
+            shadow_sum_x       <= reg_sum_x;
+            shadow_sum_y       <= reg_sum_y;
+            shadow_coeff_a     <= reg_coeff_a;
+            shadow_coeff_b     <= reg_coeff_b;
+        end
+    end
+// revise end
+
+
+
+
+
+
+
+   always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             valid_0 <= 0;
             valid_1 <= 0;
@@ -522,28 +559,34 @@ assign sum_1 = ((reg_MG_j == 10'd1) || (reg_MG_j == 10'd58    ) || (reg_MG_j == 
         if(~rstn) begin
             ma_this_xp <= 0;
             ma_this_yp <= 0;
-        end else if(valid_6 && sum_1)begin 
+        // end else if(valid_6 && sum_1)begin            // [OLD]
+        end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
             ma_this_xp <= 0;
             ma_this_yp <= 0;
-        end else if(valid_6 && (~sum_1))begin 
-            ma_this_xp <= reg_sum_x;
-            ma_this_yp <= reg_sum_y;
+        // end else if(valid_6 && (~sum_1))begin         // [OLD]
+        end else if(valid_6 && (~shadow_sum_1))begin     // [NEW] Use shadow signal
+            // ma_this_xp <= reg_sum_x;                  // [OLD]
+            ma_this_xp <= shadow_sum_x;                  // [NEW] Use shadow data
+            // ma_this_yp <= reg_sum_y;                  // [OLD]
+            ma_this_yp <= shadow_sum_y;                  // [NEW] Use shadow data
         end else begin
             ma_this_xp <= ma_this_xp;
             ma_this_yp <= ma_this_yp;
         end
     end
-
+	
 // ma_that_xp
 // ma_that_yp
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             ma_that_xp <= 0;
             ma_that_yp <= 0;
-        end else if(valid_6 && sum_1)begin    
+        //end else if(valid_6 && sum_1)begin 
+		end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal		
             ma_that_xp <= 0;
             ma_that_yp <= 0;
-        end else if(valid_6 && (~sum_1))begin 
+        //end else if(valid_6 && (~sum_1))begin
+		end else if(valid_6 && (~shadow_sum_1))begin     // [NEW] Use shadow signal		
             ma_that_xp <= montgomery_x;
             ma_that_yp <= montgomery_y;
         end else begin
@@ -552,31 +595,40 @@ assign sum_1 = ((reg_MG_j == 10'd1) || (reg_MG_j == 10'd58    ) || (reg_MG_j == 
         end
     end
 
+
 // ma_coeff_a
 // ma_coeff_b
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             ma_coeff_a <= 0;
             ma_coeff_b <= 0;
-        end else if(valid_6 && sum_1)begin    
-            ma_coeff_a <= reg_coeff_a;
-            ma_coeff_b <= reg_coeff_b;
-        end else if(valid_6 && (~sum_1))begin 
-            ma_coeff_a <= reg_coeff_a;
-            ma_coeff_b <= reg_coeff_b;
+        // end else if(valid_6 && sum_1)begin            // [OLD]
+        end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
+            // ma_coeff_a <= reg_coeff_a;                // [OLD]
+            ma_coeff_a <= shadow_coeff_a;                // [NEW] Use shadow data
+            // ma_coeff_b <= reg_coeff_b;                // [OLD]
+            ma_coeff_b <= shadow_coeff_b;                // [NEW] Use shadow data
+        // end else if(valid_6 && (~sum_1))begin         // [OLD]
+        end else if(valid_6 && (~shadow_sum_1))begin     // [NEW] Use shadow signal
+            // ma_coeff_a <= reg_coeff_a;                // [OLD]
+            ma_coeff_a <= shadow_coeff_a;                // [NEW] Use shadow data
+            // ma_coeff_b <= reg_coeff_b;                // [OLD]
+            ma_coeff_b <= shadow_coeff_b;                // [NEW] Use shadow data
         end else begin
             ma_coeff_a <= ma_coeff_a;
             ma_coeff_b <= ma_coeff_b;
         end
     end
-
+	
 // ma_param_valid
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             ma_param_valid <= 0;
-        end else if(valid_6 && sum_1)begin   
+        // end else if(valid_6 && sum_1)begin            // [OLD]
+        end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
             ma_param_valid <= 0;
-        end else if(valid_6 && (~sum_1))begin
+        // end else if(valid_6 && (~sum_1))begin         // [OLD]
+        end else if(valid_6 && (~shadow_sum_1))begin     // [NEW] Use shadow signal
             ma_param_valid <= 1;
         end else begin
             ma_param_valid <= 0;
@@ -669,7 +721,8 @@ assign t3_inv_rslt_valid_o   = top_inv_rslt_valid_o;
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             result_valid <= 0;
-        end else if(valid_6 && sum_1)begin 
+        //end else if(valid_6 && sum_1)begin 
+		end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
             result_valid <= 1;
         end else if(rslt_all_tvalid_o)begin
             result_valid <= 1;
@@ -682,7 +735,8 @@ assign t3_inv_rslt_valid_o   = top_inv_rslt_valid_o;
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             result_add_x <= 0;
-        end else if(valid_6 && sum_1)begin   
+        //end else if(valid_6 && sum_1)begin   
+		end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
             result_add_x <= montgomery_x;
         end else if(rslt_sumx_tvalid_o)begin 
             result_add_x <= rslt_sumx_o;//rslt_sumx_o
@@ -695,7 +749,8 @@ assign t3_inv_rslt_valid_o   = top_inv_rslt_valid_o;
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             result_add_y <= 0;
-        end else if(valid_6 && sum_1)begin   
+        //end else if(valid_6 && sum_1)begin   
+		end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
             result_add_y <= montgomery_y;
         end else if(rslt_sumy_tvalid_o)begin 
             result_add_y <= rslt_sumy_o;
@@ -708,7 +763,8 @@ assign t3_inv_rslt_valid_o   = top_inv_rslt_valid_o;
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             lvs_1 <= 0;
-        end else if(valid_6 && sum_1)begin 
+        //end else if(valid_6 && sum_1)begin 
+		end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
             lvs_1 <= 1;
         end else begin
             lvs_1 <= 0;
@@ -719,7 +775,8 @@ assign t3_inv_rslt_valid_o   = top_inv_rslt_valid_o;
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             lvs_montgomery_y <= 0;
-        end else if(valid_6 && sum_1)begin 
+        //end else if(valid_6 && sum_1)begin 
+		end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
             lvs_montgomery_y <= montgomery_y;
         end else begin
             lvs_montgomery_y <= lvs_montgomery_y;
@@ -730,7 +787,8 @@ assign t3_inv_rslt_valid_o   = top_inv_rslt_valid_o;
     always @(posedge clk or negedge rstn) begin
         if(~rstn) begin
             lvs_bit0and1 <= 0;
-        end else if(valid_6 && sum_1)begin 
+        //end else if(valid_6 && sum_1)begin 
+		end else if(valid_6 && shadow_sum_1)begin        // [NEW] Use shadow signal
             lvs_bit0and1 <= w_bit0and1;
         end else if(rslt_all_tvalid_o)begin
             lvs_bit0and1 <= w_bit0and1;
@@ -757,7 +815,8 @@ assign ready = reg_ready;
 always @(posedge clk or negedge rstn) begin
     if(~rstn) begin
         reg_ready <= 1;
-    end else if(result_valid)begin
+    //end else if(result_valid)begin    // [OLD] Wait for result (slow)
+	end else if(pre_data_G_o_v)begin    // [NEW] Early Ready: Accept new task immediately upon reply
         reg_ready <= 1;
     end else if(bit3_valid)begin
         reg_ready <= 0;

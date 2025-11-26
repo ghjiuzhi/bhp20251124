@@ -638,8 +638,7 @@ end
 
 // Output result channel
 
-// [MODIFICATION] Remove internal instantiation and bypass to Top-Level Ports
-/*
+
     // Instantiate DUT
     cast_lossy uut_cast_lossy (
         .i_clk       (clk                   ),
@@ -663,33 +662,9 @@ end
         .o_last      (los_o_last            ),
         .o_length    (los_o_length          )
     );
-*/
 
-// -------------------------------------------------------------------------
-    // [NEW] Direct Connection to Top-Level Ports (Interface to TB)
-    // -------------------------------------------------------------------------
 
-    // 1. Output Direction: Send internal request data to Top-Level Ports
-    //    (Internal Logic -> Output Port -> Testbench)
-    assign top_los_i_vld    = los_i_vld;
-    assign top_los_i_a      = los_i_a;
-    assign top_los_i_size   = los_i_size;
-    assign top_los_i_signed = los_i_signed;
 
-    // 2. Input Direction: Receive results from Top-Level Ports back to internal logic
-    //    (Testbench -> Input Port -> Internal Logic)
-    assign los_o_rdy        = top_los_o_rdy;
-    
-    assign los_o_res_vld    = top_los_o_res_vld;
-    assign los_o_res        = top_los_o_res;
-    assign los_o_size       = top_los_o_size;
-    assign los_o_signed     = top_los_o_signed;
-
-    assign los_o_lvs_vld    = top_los_o_lvs_vld;
-    assign los_o_lvs        = top_los_o_lvs;
-    assign los_o_field_ena  = top_los_o_field_ena;
-    assign los_o_last       = top_los_o_last;
-    assign los_o_length     = top_los_o_length;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // field_mul_gfp
