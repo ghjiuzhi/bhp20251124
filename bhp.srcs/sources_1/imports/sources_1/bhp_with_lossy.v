@@ -61,7 +61,26 @@ module bhp_with_lossy #(
     input wire [QID_WIDTH-1:0]  i_qid,
     output reg [QID_WIDTH-1:0]  o_qid,
 	
-
+    // [New] Cast Lossy Interface (Externalized to TB)
+    // Data sent to TB (Originally inputs to cast_lossy)
+    output wire         top_los_i_vld,
+    output wire [252:0] top_los_i_a,
+    output wire [2:0]   top_los_i_size,
+    output wire         top_los_i_signed,
+    
+    // Data received from TB (Originally outputs from cast_lossy)
+    input  wire         top_los_o_rdy,
+    input  wire         top_los_o_res_vld,
+    input  wire [127:0] top_los_o_res,
+    input  wire [2:0]   top_los_o_size,
+    input  wire         top_los_o_signed,
+    
+    input  wire         top_los_o_lvs_vld,
+    input  wire [255:0] top_los_o_lvs,
+    input  wire         top_los_o_field_ena,
+    input  wire         top_los_o_last,
+    input  wire [7:0]   top_los_o_length,
+    
     // External multiplier interface
     // Data sent to TB (Output)
     output wire [255:0] top_mul0_a_i,        // Multiplier A
@@ -70,7 +89,16 @@ module bhp_with_lossy #(
     
     // Data received from TB (Input)
     input  wire [255:0] top_mul0_rslt_o,       // Calculation result
-    output wire         top_mul0_rslt_valid_o  // Result valid signal
+    input  wire         top_mul0_rslt_valid_o,  // Result valid signal
+
+    output wire [256-1:0] top_inv_a             ,
+    output wire [256-1:0] top_inv_b             ,
+    output wire           top_inv_ab_valid      ,
+    input  wire [256-1:0] top_inv_rslt          ,
+    input  wire           top_inv_rslt_valid    
+
+
+
     );
 
 // wire         i_vld      ;
@@ -151,11 +179,11 @@ wire           top_mul0_ab_valid      ;
 wire [256-1:0] top_mul0_rslt          ;
 wire           top_mul0_rslt_valid    ;
 
-wire [256-1:0] top_inv_a             ;
-wire [256-1:0] top_inv_b             ;
-wire           top_inv_ab_valid      ;
-wire [256-1:0] top_inv_rslt          ;
-wire           top_inv_rslt_valid    ;
+// wire [256-1:0] top_inv_a             ;
+// wire [256-1:0] top_inv_b             ;
+// wire           top_inv_ab_valid      ;
+// wire [256-1:0] top_inv_rslt          ;
+// wire           top_inv_rslt_valid    ;
 
 wire [255 : 0]  fifo_i_din        ;
 wire            fifo_i_wr_en      ;
@@ -610,7 +638,8 @@ end
 
 // Output result channel
 
-
+// [MODIFICATION] Remove internal instantiation and bypass to Top-Level Ports
+/*
     // Instantiate DUT
     cast_lossy uut_cast_lossy (
         .i_clk       (clk                   ),
@@ -634,9 +663,33 @@ end
         .o_last      (los_o_last            ),
         .o_length    (los_o_length          )
     );
+*/
 
+// -------------------------------------------------------------------------
+    // [NEW] Direct Connection to Top-Level Ports (Interface to TB)
+    // -------------------------------------------------------------------------
 
+    // 1. Output Direction: Send internal request data to Top-Level Ports
+    //    (Internal Logic -> Output Port -> Testbench)
+    assign top_los_i_vld    = los_i_vld;
+    assign top_los_i_a      = los_i_a;
+    assign top_los_i_size   = los_i_size;
+    assign top_los_i_signed = los_i_signed;
 
+    // 2. Input Direction: Receive results from Top-Level Ports back to internal logic
+    //    (Testbench -> Input Port -> Internal Logic)
+    assign los_o_rdy        = top_los_o_rdy;
+    
+    assign los_o_res_vld    = top_los_o_res_vld;
+    assign los_o_res        = top_los_o_res;
+    assign los_o_size       = top_los_o_size;
+    assign los_o_signed     = top_los_o_signed;
+
+    assign los_o_lvs_vld    = top_los_o_lvs_vld;
+    assign los_o_lvs        = top_los_o_lvs;
+    assign los_o_field_ena  = top_los_o_field_ena;
+    assign los_o_last       = top_los_o_last;
+    assign los_o_length     = top_los_o_length;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // field_mul_gfp
@@ -768,18 +821,18 @@ fp_KOM_Bar_MM #(
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-    field_inv_gfp #(
-        .P_MOD                  (P_MOD)
-    )
-    u_field_inv_gfp(
-        .fi_clk_i               (clk                    ),
-        .fi_rstn_i              (rstn                   ),
-        .fi_a_i                 (top_inv_a              ),
-        .fi_b_i                 (top_inv_b              ),
-        .fi_ab_valid_i          (top_inv_ab_valid       ),
-        .fi_rslt_o              (top_inv_rslt           ),
-        .fi_rslt_valid_o        (top_inv_rslt_valid     )
-    );
+    // field_inv_gfp #(
+    //     .P_MOD                  (P_MOD)
+    // )
+    // u_field_inv_gfp(
+    //     .fi_clk_i               (clk                    ),
+    //     .fi_rstn_i              (rstn                   ),
+    //     .fi_a_i                 (top_inv_a              ),
+    //     .fi_b_i                 (top_inv_b              ),
+    //     .fi_ab_valid_i          (top_inv_ab_valid       ),
+    //     .fi_rslt_o              (top_inv_rslt           ),
+    //     .fi_rslt_valid_o        (top_inv_rslt_valid     )
+    // );
 
 
 
@@ -1116,7 +1169,8 @@ always @(posedge clk or negedge rstn) begin
         top_request_r <= 0;
     end else if(top_request_temp_posedge)begin
         top_request_r <= 1;
-    end else if(bc_o_loop_point || bc_o_change_start)begin
+    // end else if(bc_o_loop_point || bc_o_change_start)begin
+    end else if(bc_o_loop_point)begin
         top_request_r <= 0;
     end else begin
         top_request_r <= top_request_r;

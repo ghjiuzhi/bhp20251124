@@ -66,6 +66,28 @@ module bhp_with_lossy_tb;
     wire [252:0] w_tb_mul_rslt_core;  // Raw output from Multiplier (253 bits)
     wire [255:0] w_tb_mul_rslt_pad;   // Padded result (256 bits) sent back to DUT
     wire         w_tb_mul_rslt_vld;   // Result valid signal sent back to DUT
+	
+	
+    // [NEW] Interconnect Signals for External Lossy Module
+    
+    // Signals from DUT to TB (originally inputs to internal cast_lossy)
+    wire         w_los_i_vld;
+    wire [252:0] w_los_i_a;
+    wire [2:0]   w_los_i_size;
+    wire         w_los_i_signed;
+    
+    // Signals from TB to DUT (originally outputs from internal cast_lossy)
+    wire         w_los_o_rdy;
+    wire         w_los_o_res_vld;
+    wire [127:0] w_los_o_res;
+    wire [2:0]   w_los_o_size;
+    wire         w_los_o_signed;
+    
+    wire         w_los_o_lvs_vld;
+    wire [255:0] w_los_o_lvs;
+    wire         w_los_o_field_ena;
+    wire         w_los_o_last;
+    wire [7:0]   w_los_o_length;
 
 
     localparam ST_IDLE    = 1;
@@ -142,6 +164,13 @@ module bhp_with_lossy_tb;
     reg  [256-1:0] rx_o_x1;
     reg  [256-1:0] rx_o_y1;
     wire [9:0]     pd_addr;
+
+    wire [256-1:0] top_inv_a         ;
+    wire [256-1:0] top_inv_b         ;
+    wire           top_inv_ab_valid  ;
+    wire [256-1:0] top_inv_rslt      ;
+    wire           top_inv_rslt_valid;
+
     // Instantiate the Unit Under Test (UUT)
     bhp_with_lossy #(
         .QID_WIDTH (QID_WIDTH)   
@@ -202,10 +231,37 @@ module bhp_with_lossy_tb;
         .top_mul0_a_i          ( w_tb_mul_a   ),
         .top_mul0_b_i          ( w_tb_mul_b   ),
         .top_mul0_ab_valid_i   ( w_tb_mul_vld ),
+		
+		// [NEW] Connect the Exposed Lossy Interface
+        // Connect DUT's output ports (requests) to TB wires
+        .top_los_i_vld       (w_los_i_vld),
+        .top_los_i_a         (w_los_i_a),
+        .top_los_i_size      (w_los_i_size),
+        .top_los_i_signed    (w_los_i_signed),
+        
+        // Connect TB wires (results) to DUT's input ports
+        .top_los_o_rdy       (w_los_o_rdy),
+        
+        .top_los_o_res_vld   (w_los_o_res_vld),
+        .top_los_o_res       (w_los_o_res),
+        .top_los_o_size      (w_los_o_size),
+        .top_los_o_signed    (w_los_o_signed),
+        
+        .top_los_o_lvs_vld   (w_los_o_lvs_vld),
+        .top_los_o_lvs       (w_los_o_lvs),
+        .top_los_o_field_ena (w_los_o_field_ena),
+        .top_los_o_last      (w_los_o_last),
+        .top_los_o_length    (w_los_o_length),
 
         // Input ports: Receive results from Testbench Multiplier to DUT
         .top_mul0_rslt_o       ( w_tb_mul_rslt_pad ), // Connect the 256-bit padded signal
-        .top_mul0_rslt_valid_o ( w_tb_mul_rslt_vld )
+        .top_mul0_rslt_valid_o ( w_tb_mul_rslt_vld ),
+
+        .top_inv_a             (top_inv_a         ),
+        .top_inv_b             (top_inv_b         ),
+        .top_inv_ab_valid      (top_inv_ab_valid  ),
+        .top_inv_rslt          (top_inv_rslt      ),
+        .top_inv_rslt_valid    (top_inv_rslt_valid)
 		
 		
     );
@@ -227,11 +283,53 @@ module bhp_with_lossy_tb;
         .o_rslt_vld ( w_tb_mul_rslt_vld  ),
         .o_rslt     ( w_tb_mul_rslt_core ) // Output is 253 bits wide
     );
+	
+	
+    // [NEW] Instantiate cast_lossy in Testbench
+    // This replaces the internal instance that was removed from the DUT.
+    cast_lossy u_tb_cast_lossy (
+        .i_clk       (clk),
+        .i_rst_n     (rstn),
+            
+        // Connect Inputs (Driven by DUT's new output ports)   
+        .i_vld       (w_los_i_vld),
+        .i_a         (w_los_i_a),
+        .i_size      (w_los_i_size),
+        .i_signed    (w_los_i_signed),
+        
+        // Connect Outputs (Driving DUT's new input ports)
+        .o_rdy       (w_los_o_rdy),
+        .o_res_vld   (w_los_o_res_vld),
+        .o_res       (w_los_o_res),
+        .o_size      (w_los_o_size),
+        .o_signed    (w_los_o_signed),
+        
+        .o_lvs_vld   (w_los_o_lvs_vld),
+        .o_lvs       (w_los_o_lvs),
+        .o_field_ena (w_los_o_field_ena),
+        .o_last      (w_los_o_last),
+        .o_length    (w_los_o_length),
+        
+        // Fixed Signals (As per original RTL design)     
+        .i_res_rdy   (1'b1), 
+        .i_lvs_rdy   (1'b1)
+    );
 
     // Bit-width adaptation: Pad the upper 3 bits with 0
     assign w_tb_mul_rslt_pad = {3'b0, w_tb_mul_rslt_core};
-	
-	
+    parameter P_MOD  = 256'h12ab_655e_9a2c_a556_60b4_4d1e_5c37_b001_59aa_76fe_d000_0001_0a11_8000_0000_0001;
+    field_inv_gfp #(
+        .P_MOD                  (P_MOD)
+    )
+    u_field_inv_gfp(
+        .fi_clk_i               (clk                    ),
+        .fi_rstn_i              (rstn                   ),
+        .fi_a_i                 (top_inv_a              ),
+        .fi_b_i                 (top_inv_b              ),
+        .fi_ab_valid_i          (top_inv_ab_valid       ),
+        .fi_rslt_o              (top_inv_rslt           ),
+        .fi_rslt_valid_o        (top_inv_rslt_valid     )
+    );
 	
 	
 	
