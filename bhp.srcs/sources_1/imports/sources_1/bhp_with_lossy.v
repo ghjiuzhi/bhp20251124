@@ -1144,6 +1144,8 @@ always @(posedge clk or negedge rstn) begin
         top_request_r <= 0;
     end else if(top_request_temp_posedge)begin
         top_request_r <= 1;
+		
+		/*
     // end else if(bc_o_loop_point || bc_o_change_start)begin
     end else if(bc_o_loop_point)begin
         top_request_r <= 0;
@@ -1151,6 +1153,35 @@ always @(posedge clk or negedge rstn) begin
         top_request_r <= top_request_r;
     end
 end
+
+*/
+    end else if(bhp_ro_bhp256_rslt_vld) begin
+        // 当最终计算结果有效时，强制停止请求发送。
+        // 如果没有这一行，下面的 ST_BHP 判断可能会导致请求永远停不下来。
+        top_request_r <= 0;
+	end else if(bc_o_loop_point)begin	
+		if(cur_state == ST_BHP)
+            top_request_r <= 1;
+        else
+            top_request_r <= 0; // 在非计算状态下，维持“收完即停”的原逻辑
+            
+    end else begin
+        top_request_r <= top_request_r;
+    end
+end
+		
+	/*	
+    // end else if(bc_o_loop_point || bc_o_change_start)begin
+    end else if(bc_o_loop_point)begin
+        // 【修改点】：收到回复后，不直接置0，而是检查是否还需要数据
+        // 如果 top_request_temp 为 1 (表示内部还需要数据)，则保持 top_request_r 为 1
+        // 这样当 bc_o_loop_point 变回 0 时，top_request 会立即拉高，发起下一次请求
+        top_request_r <= top_request_temp; 
+    end else begin
+        top_request_r <= top_request_r;
+    end
+end	
+*/
 
 // assign top_request = top_request_r && (~(bc_o_loop_point || bc_o_change_start));
 assign top_request = top_request_r && (~(bc_o_loop_point));
